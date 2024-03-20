@@ -1,36 +1,41 @@
 package org.example;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.net.Socket;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.io.*;
+import java.net.*;
 
 public class ClientHandler implements Runnable {
-	private static final Logger LOGGER = Logger.getLogger(ClientHandler.class.getName());
 	private final Socket clientSocket;
-
 	public ClientHandler(Socket clientSocket) {
 		this.clientSocket = clientSocket;
 	}
 
 	@Override
 	public void run() {
-		try (
-				ObjectInputStream inputStream = new ObjectInputStream(clientSocket.getInputStream())
-		) {
-			while (true) {
-				Object receivedObject = inputStream.readObject();
+		ObjectOutputStream out = null;
+		ObjectInputStream in = null;
+		try {
+			out = new ObjectOutputStream(clientSocket.getOutputStream());
+			in = new ObjectInputStream(clientSocket.getInputStream());
 
-				if (receivedObject instanceof String receivedMessage) {
-					LOGGER.info("Otrzymano wiadomość od klienta " + clientSocket.getInetAddress() + ": " + receivedMessage);
-				} else {
-					LOGGER.warning("Otrzymano nieznany typ obiektu od klienta " + clientSocket.getInetAddress());
-				}
+			out.writeObject("ready");
+			out.flush();
+
+			int n = (int) in.readObject();
+
+			out.writeObject("ready for messages");
+			out.flush();
+
+			for (int i = 0; i < n; i++) {
+				Message message = (Message) in.readObject();
+				message.set_number(i+1);
+				System.out.println("Received message number: " + message.get_number() + "  from client: " + message.get_content()) ;
 			}
 
-		} catch (IOException e) {
-			LOGGER.log(Level.SEVERE, "Błąd obsługi klienta: " + e.getMessage(), e);
+			out.writeObject("finished");
+			out.flush();
+		}
+		catch (IOException e) {
+			throw new RuntimeException(e);
 		} catch (ClassNotFoundException e) {
 			throw new RuntimeException(e);
 		} finally {
@@ -41,9 +46,9 @@ public class ClientHandler implements Runnable {
 	private void closeConnection() {
 		try {
 			clientSocket.close();
-			LOGGER.info("Zamknięto połączenie z klientem: " + clientSocket.getInetAddress());
+			System.out.println("Connection closed: " + clientSocket.getInetAddress());
 		} catch (IOException e) {
-			LOGGER.log(Level.SEVERE, "Błąd podczas zamykania połączenia: " + e.getMessage(), e);
+			System.out.println("Error with closing connetcion: " + e.getMessage());
 		}
 	}
 }
